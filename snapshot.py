@@ -32,12 +32,14 @@ def capture_window_mss(window_title):
     # 获取窗口句柄和位置信息
     hwnd = window_info['handle']
     x, y, width, height = window_info['rect']
-    print(f"窗口客户区大小: {width} x {height}")
 
     # 将窗口置顶
     try:
         win32gui.BringWindowToTop(hwnd)
         win32gui.SetForegroundWindow(hwnd)
+        # 短暂延迟确保窗口置顶完成
+        import time
+        time.sleep(0.2)  # 延迟200毫秒让窗口完全置顶
     except Exception as e:
         print(f"窗口置顶失败: {e}")
 

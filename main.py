@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # 创建主窗口
     window = MainWindow()
-    window.show()
+    window.showMaximized()
     
     # 运行应用程序主循环
     sys.exit(app.exec())
