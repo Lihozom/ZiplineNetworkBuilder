@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QPushButton, QSplitter
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, QPushButton, QSplitter, QSlider
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPixmap
 from snapshot import capture_window_mss
@@ -93,8 +93,19 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(map_tree)
         # 添加操作按钮
+        self.threshold_label = QLabel("匹配阈值:")
+        self.threshold_label.setStyleSheet("font-size: 14px;")
+
+        layout.addWidget(self.threshold_label)
+        self.threshold_slider = QSlider(Qt.Orientation.Horizontal)
+        self.threshold_slider.setMinimum(0)
+        self.threshold_slider.setMaximum(100)
+        self.threshold_slider.setValue(80)
+        self.threshold_slider.valueChanged.connect(lambda: self.update_threshold_label())
+        layout.addWidget(self.threshold_slider)
         snap_button = QPushButton("截图并标记滑索")
         snap_button.clicked.connect(lambda: self.capture_and_display())
+        self.update_threshold_label()
         load_button = QPushButton("加载项目")
         save_button = QPushButton("保存项目")
         
@@ -125,34 +136,39 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.image_label)
 
         return main_content
-
+    def update_threshold_label(self):
+        """更新匹配阈值标签"""
+        threshold = self.threshold_slider.value() / 100.0
+        self.threshold_label.setText(f"匹配阈值: {threshold:.2f}")
     
     def capture_and_display(self):
         """截图并进行滑索标记后显示在主工作区域"""
+        threshold = self.threshold_slider.value() / 100.0
         try:
             # 调用截图函数
             image = capture_window_mss("Endfield")
             
             if image is not None:
                 # 将OpenCV图像(BGR)转换为RGB格式
-                rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                rgb_image = image.copy()
+                #rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
                 
                 # 调整图像到720p分辨率（1280x720）
                 target_width, target_height = 1280, 720
                 resized_rgb_image = cv2.resize(rgb_image, (target_width, target_height), interpolation=cv2.INTER_AREA)
                 
                 # 进行模板匹配
-                matches = template_match_with_chroma_key(resized_rgb_image, 'resource/Zipline.png', 0.4)
+                matches = template_match_with_chroma_key(resized_rgb_image, 'resource/Zipline.png', threshold)
                 
                 if matches is not None:
                     # 读取模板获取尺寸
                     template = cv2.imread('resource/Zipline.png', cv2.IMREAD_UNCHANGED)
                     if template is not None:
                         h, w = template.shape[:2]
-                        result_img = draw_matches(resized_rgb_image, matches, (h, w))
+                        result_img = draw_matches(resized_rgb_image, matches, template_shape=(h, w))
                     else:
                         # 如果无法读取模板，使用一个默认大小
-                        result_img = draw_matches(resized_rgb_image, matches, (50, 50))  # 假设模板大小
+                        result_img = draw_matches(resized_rgb_image, matches, template_shape=(50, 50))  # 假设模板大小
                     
                     # 转换为QImage并显示
                     result_rgb = result_img  # 已经是RGB格式
@@ -175,54 +191,6 @@ class MainWindow(QMainWindow):
             print(f"截图过程中出现错误: {e}")
             self.image_label.setText(f"截图错误: {str(e)}")
     
-    def mark_ziplines(self):
-        """对当前显示的截图进行滑索模板匹配并绘制结果"""
-        threshold = 0.4
-        try:
-            # 获取当前显示的图像
-            pixmap = self.image_label.pixmap()
-            if pixmap is None:
-                self.image_label.setText("请先截图再标记滑索")
-                return
-            
-            # 将QPixmap转换为OpenCV图像格式
-            qimg = pixmap.toImage()
-            qimg = qimg.convertToFormat(QImage.Format.Format_RGB888)
-            
-            # 转换为numpy数组
-            ptr = qimg.bits()
-            ptr.setsize(qimg.sizeInBytes())
-            img_array = np.array(ptr).reshape(qimg.height(), qimg.width(), 3)
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-            
-            # 进行模板匹配
-            matches = template_match_with_chroma_key(img_array, 'resource/Zipline.png', threshold)
-            
-            if matches:
-                # 绘制匹配结果
-                # 需要知道模板的尺寸，这里我们读取模板获取尺寸
-                template = cv2.imread('resource/Zipline.png', cv2.IMREAD_UNCHANGED)
-                if template is not None:
-                    h, w = template.shape[:2]
-                    result_img = draw_matches(img_array, matches, threshold, (h, w, 3))
-                else:
-                    # 如果无法读取模板，使用一个默认大小
-                    result_img = draw_matches(img_array, matches, threshold, (50, 50, 3))  # 假设模板大小
-                
-                # 转换回QPixmap并显示
-                result_rgb = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
-                height, width, channel = result_rgb.shape
-                bytes_per_line = 3 * width
-                q_img = QImage(result_rgb.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
-                result_pixmap = QPixmap.fromImage(q_img)
-                
-                self.image_label.setPixmap(result_pixmap)
-            else:
-                self.image_label.setPixmap(result_pixmap)
-                
-        except Exception as e:
-            print(f"标记滑索过程中出现错误: {e}")
-            self.image_label.setText(f"标记滑索错误: {str(e)}")
 
     def keyPressEvent(self, event):
         # 添加ESC键退出功能

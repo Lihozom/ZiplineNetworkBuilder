@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import os
 
-def template_match_with_chroma_key(image, template_path="resource/Zipline.png", threshold=0.8):
+def template_match_with_chroma_key(image, template_path="resource/Zipline.png", threshold=0.7):
     """
     对图像进行带绿幕的模板匹配
     
@@ -24,35 +24,18 @@ def template_match_with_chroma_key(image, template_path="resource/Zipline.png", 
     
     if template is None:
         raise ValueError(f"无法读取模板图像: {template_path}")
-    
-    # 如果模板有alpha通道，则使用alpha通道作为掩码
-    if template.shape[2] == 4:
-        # 分离BGR和Alpha通道
-        template_bgr = template[:, :, :3]
-        template_alpha = template[:, :, 3]
-        mask = template_alpha
-    else:
-        # 如果没有alpha通道，检测绿色背景并创建掩码
-        hsv_template = cv2.cvtColor(template, cv2.COLOR_BGR2HSV)
-        # 定义绿色范围
-        lower_green = np.array([40, 50, 50])
-        upper_green = np.array([80, 255, 255])
-        mask = cv2.inRange(hsv_template, lower_green, upper_green)
-        # 反转掩码，使绿色区域变为0，其他区域为255
-        mask = 255 - mask
-        template_bgr = template
+    template = cv2.cvtColor(template, cv2.COLOR_BGRA2BGR)
+    # 定义绿色范围
+    lower_green = np.array([0, 255, 0])
+    upper_green = np.array([0, 255, 0])
+    mask = cv2.inRange(template, lower_green, upper_green)
+    # 反转掩码，使绿色区域变为0，其他区域为255
+    mask = 255 - mask
+    template_bgr = template
+    cv2.imshow("Template", image)
+    cv2.waitKey()
 
-    # 如果输入图像是灰度图，转换为彩色图
-    if len(image.shape) == 2:
-        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-    
-    # 如果模板是灰度图，输入图像也转换为灰度图
-    if len(template_bgr.shape) == 2:
-        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        result = cv2.matchTemplate(image_gray, template_bgr, cv2.TM_CCOEFF_NORMED, mask=mask)
-    else:
-        # 使用颜色模板匹配
-        result = cv2.matchTemplate(image, template_bgr, cv2.TM_CCOEFF_NORMED, mask=mask)
+    result = cv2.matchTemplate(image, template_bgr, cv2.TM_CCOEFF_NORMED, mask=mask)
     
     # 找到所有匹配位置，其中置信度大于阈值
     locations = np.where(result >= threshold)
